@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strategy Backtester</title>
+<meta name="description" content="Backtest any entry/exit rules on Nifty 500 stocks: win rate, stop-loss hits, target hits.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%234338ca'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/><circle cx='26' cy='8' r='2.5' fill='white'/></svg>">
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#fff; --ink:#15181d; --ink2:#454c57; --muted:#6b7380; --line:#e2e5ea; --soft:#eef0f4;
+  --accent:#4338ca; --accent-ink:#fff; --accent-soft:#eceafd;
+  --good:#15803d; --good-soft:#e7f5ec; --bad:#c2410c; --bad-soft:#fdeee6; --neutral:#8b93a0; --warn:#a16207;
+  --series:#4338ca; --grid:#e8eaef;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1115; --panel:#171a20; --ink:#e8eaee; --ink2:#bcc2cc; --muted:#8e97a4; --line:#2a2f38; --soft:#20242c;
+    --accent:#8b85f5; --accent-ink:#0f1115; --accent-soft:#25234a;
+    --good:#4ade80; --good-soft:#15291d; --bad:#fb923c; --bad-soft:#321f14; --neutral:#7a8392; --warn:#facc15;
+    --series:#8b85f5; --grid:#252a33;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1115; --panel:#171a20; --ink:#e8eaee; --ink2:#bcc2cc; --muted:#8e97a4; --line:#2a2f38; --soft:#20242c;
+  --accent:#8b85f5; --accent-ink:#0f1115; --accent-soft:#25234a;
+  --good:#4ade80; --good-soft:#15291d; --bad:#fb923c; --bad-soft:#321f14; --neutral:#7a8392; --warn:#facc15;
+  --series:#8b85f5; --grid:#252a33;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,select,input{font:inherit;color:inherit}
+header{background:var(--panel);border-bottom:1px solid var(--line)}
+.bar{max-width:1320px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+h1{font-size:18px;margin:0;font-weight:650}
+.sub{color:var(--muted);font-size:13px}
+.spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 11px;cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--ink)}
+.btn.small{padding:3px 8px;font-size:12px}
+main{max-width:1320px;margin:0 auto;padding:16px;display:grid;grid-template-columns:430px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:980px){main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card + .card{margin-top:12px}
+h2{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:650}
+h3{font-size:13px;margin:14px 0 6px;font-weight:650}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.row label{font-size:12px;color:var(--muted)}
+select,input[type=number],input[type=text],input[type=date]{border:1px solid var(--line);background:var(--bg);border-radius:7px;padding:5px 7px;font-size:13px;min-width:0}
+input[type=number]{width:64px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--panel);padding:5px 11px;cursor:pointer;font-size:13px}
+.seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.cond{border:1px solid var(--line);border-radius:9px;padding:8px;margin-bottom:6px;background:var(--bg)}
+.cond .top{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.opnd{display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap}
+.opnd input[type=number]{width:60px}
+.opnd select{max-width:190px}
+.opnd .mini{font-size:11px;color:var(--muted)}
+.opsel{font-weight:600}
+.x{margin-left:auto}
+.logic{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;margin:6px 0}
+.summary{font-size:12.5px;color:var(--ink2);background:var(--accent-soft);border-radius:8px;padding:8px 10px;margin-top:8px}
+.hint{font-size:12px;color:var(--muted)}
+.run{width:100%;padding:10px;font-size:15px;margin-top:4px}
+.progress{height:4px;background:var(--soft);border-radius:2px;overflow:hidden;margin-top:8px;display:none}
+.progress b{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+.status{font-size:12px;color:var(--muted);margin-top:6px;min-height:1em}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel)}
+.kpi .l{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:2px}
+.kpi .s{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+.stack{display:flex;height:14px;border-radius:4px;overflow:hidden;gap:2px;margin:10px 0 6px}
+.stack span{display:block;height:100%}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:5px 8px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%);display:none;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:right;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+.tbl{overflow-x:auto}
+.why{font-size:11px;padding:1px 6px;border-radius:5px;background:var(--soft);color:var(--ink2)}
+.why.target{background:var(--good-soft);color:var(--good)} .why.sl,.why.trail{background:var(--bad-soft);color:var(--bad)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:760px){.grid2{grid-template-columns:1fr}}
+.empty{color:var(--muted);text-align:center;padding:40px 10px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:10px;overflow-x:auto}
+.tabs button{border:0;background:none;padding:7px 10px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.tabs button.on{color:var(--ink);border-color:var(--accent);font-weight:600}
+.warnbox{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:8px 10px;font-size:12.5px;color:var(--ink2);margin-top:10px}
+.pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px;font-size:12px;color:var(--muted)}
+details summary{cursor:pointer;color:var(--muted);font-size:12px}
+.bars td.b{width:40%}
+.hb{height:8px;border-radius:0 3px 3px 0;background:var(--good);display:inline-block;vertical-align:middle}
+.hb.n{background:var(--bad);border-radius:3px 0 0 3px}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Strategy Backtester</h1>
+    <span class="sub" id="dataInfo">Nifty 500 · loading data info…</span>
+    <span class="spacer"></span>
+    <select id="savedSel" title="Saved strategies"><option value="">Saved strategies…</option></select>
+    <button class="btn" id="saveBtn">Save</button>
+    <button class="btn" id="shareBtn" title="Copy a link that opens this exact strategy">Copy link</button>
+    <button class="btn ghost" id="themeBtn" title="Theme">◐</button>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="card">
+      <h2>1 · Market</h2>
+      <div class="row">
+        <div class="seg" id="tfSeg"><button data-v="daily">Daily</button><button data-v="intraday">15-min intraday</button></div>
+      </div>
+      <div class="row">
+        <label>Stocks</label>
+        <select id="universe">
+          <option value="50">Nifty 50</option><option value="100">Nifty 100</option>
+          <option value="200">Nifty 200</option><option value="500">Nifty 500</option>
+          <option value="custom">My own list…</option>
+        </select>
+        <input type="text" id="custom" placeholder="e.g. TCS, INFY, TATASTEEL" style="flex:1;display:none">
+      </div>
+      <div class="row">
+        <label>From</label><input type="date" id="from">
+        <label>To</label><input type="date" id="to">
+      </div>
+      <div class="hint" id="rangeHint"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Entry rules</h2>
+      <div class="row">
+        <select id="preset" style="flex:1"><option value="">Load a ready-made strategy…</option></select>
+      </div>
+      <div class="row">
+        <div class="seg" id="sideSeg"><button data-v="long">Buy (long)</button><button data-v="short">Sell (short)</button></div>
+      </div>
+      <div class="logic" id="logicRow">Enter when <select id="logic"><option value="all">ALL</option><option value="any">ANY</option></select> of these are true on a candle close:</div>
+      <div id="conds"></div>
+      <div class="row">
+        <button class="btn small" id="addCond">+ Condition</button>
+        <button class="btn small" id="addPat">+ Candle pattern</button>
+      </div>
+      <div class="row">
+        <label>Buy at</label>
+        <select id="entry"><option value="next">Next candle's open (realistic)</option><option value="close">Signal candle's close</option></select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Exit rules</h2>
+      <div class="row">
+        <label style="width:70px">Stop loss</label>
+        <select id="slType"><option value="pct">% from entry</option><option value="atr">× ATR</option><option value="level">At an indicator level</option><option value="none">None</option></select>
+        <input type="number" id="slV" step="0.1" min="0">
+        <span id="slLevel"></span>
+      </div>
+      <div class="row">
+        <label style="width:70px">Target</label>
+        <select id="tgType"><option value="pct">% from entry</option><option value="atr">× ATR</option><option value="r">× risk (R-multiple)</option><option value="none">None</option></select>
+        <input type="number" id="tgV" step="0.1" min="0">
+      </div>
+      <div class="row">
+        <label style="width:70px">Trailing SL</label><input type="number" id="trail" step="0.1" min="0"> <span class="hint">% below the highest price since entry (0 = off)</span>
+      </div>
+      <div class="row">
+        <label style="width:70px">Max hold</label><input type="number" id="maxBars" min="0"> <span class="hint" id="maxHint">candles (0 = no limit)</span>
+      </div>
+      <div class="row" id="intraRow">
+        <label>No new entries after</label><input type="number" id="lastEntryTime" min="915" max="1529" style="width:70px">
+        <label>Square off at</label><input type="number" id="squareOff" min="915" max="1529" style="width:70px">
+      </div>
+      <details id="exitDetails">
+        <summary>Exit on a condition too (optional)</summary>
+        <div class="logic">Exit when <select id="exitLogic"><option value="any">ANY</option><option value="all">ALL</option></select> of these are true:</div>
+        <div id="exitConds"></div>
+        <button class="btn small" id="addExit">+ Exit condition</button>
+      </details>
+      <div class="row" style="margin-top:8px">
+        <label>Costs per trade</label><input type="number" id="cost" step="0.01" min="0"> <span class="hint">% (brokerage + taxes + slippage)</span>
+      </div>
+      <div class="row">
+        <label>ATR period for ATR stops</label><input type="number" id="atrLen" min="2">
+      </div>
+      <div class="summary" id="summary"></div>
+      <button class="btn primary run" id="runBtn">Run backtest</button>
+      <div class="progress" id="prog"><b></b></div>
+      <div class="status" id="status"></div>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="card empty" id="placeholder">
+      <p style="font-size:15px;color:var(--ink)">Pick a ready-made strategy or build your own, then press <b>Run backtest</b>.</p>
+      <p>You'll see the win rate, how often the stop-loss and the target were hit, an equity curve, results by year and by stock, every trade, and which stocks match your rules today.</p>
+    </div>
+    <div id="out" style="display:none">
+      <div class="kpis" id="kpis"></div>
+      <div class="card" style="margin-top:12px">
+        <h2>How trades ended</h2>
+        <div class="stack" id="stack"></div>
+        <div class="legend" id="stackLegend"></div>
+        <div class="warnbox" id="notes"></div>
+      </div>
+      <div class="card">
+        <h2>Equity curve — total profit/loss if you put the same amount in every trade</h2>
+        <div class="chart" id="eq"></div>
+      </div>
+      <div class="card">
+        <div class="tabs" id="tabs">
+          <button data-t="signals" class="on">Matching today</button>
+          <button data-t="years">By year</button>
+          <button data-t="stocks">By stock</button>
+          <button data-t="trades">All trades</button>
+        </div>
+        <div id="tabBody"></div>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="tip" id="tip"></div>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
