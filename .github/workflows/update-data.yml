@@ -1,0 +1,60 @@
+name: Update price data & publish site
+
+on:
+  schedule:
+    # 16:15 IST (10:45 UTC) Mon–Fri, after the market closes
+    - cron: "45 10 * * 1-5"
+  workflow_dispatch: {}    # run it by hand from the Actions tab
+  push:
+    branches: [main]       # republish when you change the page
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore yesterday's data (fallback if Yahoo fails)
+        uses: actions/cache/restore@v4
+        with:
+          path: .data-cache
+          key: price-data-${{ github.run_id }}
+          restore-keys: price-data-
+
+      - name: Download Nifty 500 prices
+        run: python fetch_data.py
+
+      - name: Save data for tomorrow's fallback
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .data-cache
+          key: price-data-${{ github.run_id }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
